@@ -221,10 +221,82 @@ def compute_metrics(sessions: list[ActivitySession], breaks: list[Break]) -> Day
 
 # --- AI Summary ---
 
+def _compact_sessions(sessions: list[ActivitySession]) -> list[ActivitySession]:
+    """Merge adjacent sessions for a compact AI prompt.
+
+    Two passes:
+    1. Merge same-category neighbours (gap < 5min)
+    2. Absorb micro-sessions (< 30s) into their neighbour
+
+    Reduces 200+ micro-sessions to ~20-40 blocks.
+    """
+    if not sessions:
+        return []
+
+    def _clone(s: ActivitySession) -> ActivitySession:
+        return ActivitySession(
+            app_class=s.app_class, category=s.category,
+            start=s.start, end=s.end,
+            window_titles=list(s.window_titles),
+            browser_domains=list(s.browser_domains),
+            event_count=s.event_count,
+        )
+
+    def _absorb(dst: ActivitySession, src: ActivitySession) -> None:
+        if src.end > dst.end:
+            dst.end = src.end
+        if src.start < dst.start:
+            dst.start = src.start
+        dst.event_count += src.event_count
+        for t in src.window_titles:
+            if t not in dst.window_titles and len(dst.window_titles) < 8:
+                dst.window_titles.append(t)
+        for d in src.browser_domains:
+            if d not in dst.browser_domains:
+                dst.browser_domains.append(d)
+
+    # Pass 1: merge same-category neighbours
+    merged: list[ActivitySession] = [_clone(sessions[0])]
+    for s in sessions[1:]:
+        cur = merged[-1]
+        gap = (s.start - cur.end).total_seconds()
+        if s.category == cur.category and gap < 300:
+            _absorb(cur, s)
+        else:
+            merged.append(_clone(s))
+
+    # Pass 2: absorb micro-sessions (< 30s) into the longer neighbour
+    if len(merged) <= 1:
+        return merged
+
+    final: list[ActivitySession] = []
+    for s in merged:
+        if s.duration_seconds < 30 and final:
+            # Absorb into previous
+            _absorb(final[-1], s)
+        else:
+            final.append(s)
+
+    # Also absorb trailing micro-sessions that couldn't go left
+    cleaned: list[ActivitySession] = []
+    for i, s in enumerate(final):
+        if s.duration_seconds < 30 and cleaned:
+            _absorb(cleaned[-1], s)
+        elif s.duration_seconds < 30 and i + 1 < len(final):
+            _absorb(final[i + 1], s)
+        else:
+            cleaned.append(s)
+
+    return cleaned
+
+
 def _build_ai_prompt(sessions: list[ActivitySession], metrics: DayMetrics) -> str:
     """Build the prompt for AI day summary."""
+    # Compact sessions to reduce prompt size for local LLMs
+    compact = _compact_sessions(sessions)
+
     session_lines = []
-    for s in sessions:
+    for s in compact:
         titles = ", ".join(s.window_titles[:5]) if s.window_titles else "keine Titel"
         domains = ", ".join(s.browser_domains[:5]) if s.browser_domains else ""
         dur_min = s.duration_seconds // 60
@@ -453,12 +525,10 @@ async def generate_ai_summary(
 # --- MOTD (Message of the Day) ---
 
 def _build_motd_prompt(
-    today_metrics: DayMetrics | None,
-    yesterday_metrics: DayMetrics | None,
+    ai_summary_text: str | None,
     today_date: str,
 ) -> str:
-    """Build prompt for MOTD generation."""
-    # Determine time of day for greeting
+    """Build prompt for MOTD generation based on the AI day summary."""
     from datetime import datetime as _dt
     hour = _dt.now().hour
     if hour < 12:
@@ -468,36 +538,21 @@ def _build_motd_prompt(
     else:
         greeting = "Guten Abend"
 
-    context_parts = []
+    context = ai_summary_text if ai_summary_text else "Keine Zusammenfassung vorhanden."
 
-    if yesterday_metrics and yesterday_metrics.total_active_seconds > 0:
-        yh = yesterday_metrics.total_active_seconds // 3600
-        ym = (yesterday_metrics.total_active_seconds % 3600) // 60
-        top_cats = sorted(yesterday_metrics.category_seconds.items(), key=lambda x: -x[1])[:3]
-        cats_str = ", ".join(f"{c}: {s // 3600}h {(s % 3600) // 60}m" for c, s in top_cats)
-        context_parts.append(f"Gestern: {yh}h {ym}m aktiv. Top-Kategorien: {cats_str}")
-
-    if today_metrics and today_metrics.total_active_seconds > 0:
-        th = today_metrics.total_active_seconds // 3600
-        tm = (today_metrics.total_active_seconds % 3600) // 60
-        top_cats = sorted(today_metrics.category_seconds.items(), key=lambda x: -x[1])[:3]
-        cats_str = ", ".join(f"{c}: {s // 3600}h {(s % 3600) // 60}m" for c, s in top_cats)
-        context_parts.append(f"Heute bisher: {th}h {tm}m aktiv. Top-Kategorien: {cats_str}")
-
-    context = "\n".join(context_parts) if context_parts else "Keine bisherigen Aktivitaetsdaten."
-
-    return f"""Erstelle eine kurze, motivierende Tagesnachricht (Message of the Day) fuer ein Zeiterfassungs-Dashboard.
+    return f"""Erstelle eine kurze, motivierende Tagesnachricht basierend auf der Zusammenfassung des Arbeitstages.
 
 Datum: {today_date}
 Tageszeit-Gruss: {greeting}
 
-## Aktivitaets-Kontext:
+## Zusammenfassung des Tages:
 {context}
 
 ## Regeln:
 - Maximal 1-2 Saetze
 - Beginne mit "{greeting}!"
-- Beziehe dich kurz auf die Daten (wenn vorhanden)
+- Beziehe dich inhaltlich auf die Taetigkeiten (z.B. Projekte, Themen), NICHT auf Uhrzeiten oder Dauern
+- Nenne KEINE Zeiten, Stunden, Minuten oder Dauern
 - Freundlich, knapp, motivierend
 - Auf Deutsch
 
@@ -511,15 +566,14 @@ Antworte NUR mit dem JSON."""
 
 async def generate_motd(
     config: Config,
-    today_metrics: DayMetrics | None,
-    yesterday_metrics: DayMetrics | None,
+    ai_summary_text: str | None,
     today_date: str,
 ) -> str | None:
-    """Generate Message of the Day. Returns string or None."""
+    """Generate Message of the Day based on the AI day summary. Returns string or None."""
     if not config.ai.enabled or not config.ai.api_key:
         return None
 
-    prompt = _build_motd_prompt(today_metrics, yesterday_metrics, today_date)
+    prompt = _build_motd_prompt(ai_summary_text, today_date)
     result = await _call_ai_json(config, prompt)
 
     if result and "motd" in result:

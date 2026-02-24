@@ -6,7 +6,7 @@ import json
 
 from fastapi import APIRouter, Request
 
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
 
 from ...activity_summarizer import (
     compute_metrics,
@@ -91,6 +91,7 @@ async def day_summary(request: Request, date: str = "", regenerate: bool = False
 
     # AI summary: only return cache unless explicitly requested
     ai_summary = None
+    motd_text = None
     if config.ai.enabled and config.ai.api_key:
         cached = db.get_cached_day_summary(date)
 
@@ -113,12 +114,26 @@ async def day_summary(request: Request, date: str = "", regenerate: bool = False
                     event_count=event_count,
                 )
 
+                # Generate MOTD based on the AI summary
+                summary_text = ai_result.get("summary")
+                if summary_text:
+                    motd_text = await generate_motd(config, summary_text, date)
+                    if motd_text:
+                        db.save_motd(date, motd_text)
+
+        # Load cached MOTD if we didn't just generate one
+        if motd_text is None:
+            cached_motd = db.get_cached_motd(date)
+            if cached_motd:
+                motd_text = cached_motd
+
     return {
         "date": date,
         "sessions": [s.to_dict() for s in sessions],
         "metrics": metrics.to_dict(),
         "breaks": [b.to_dict() for b in breaks],
         "ai_summary": ai_summary,
+        "motd": motd_text,
     }
 
 
@@ -137,24 +152,17 @@ async def motd(request: Request):
     if not config.ai.enabled or not config.ai.api_key:
         return {"motd": None, "date": today}
 
-    # Build metrics for today and yesterday
-    yesterday = (date_type.today() - timedelta(days=1)).isoformat()
+    # Try to get AI summary text for today
+    ai_summary_text = None
+    cached_summary = db.get_cached_day_summary(today)
+    if cached_summary:
+        try:
+            parsed = json.loads(cached_summary["summary_text"])
+            ai_summary_text = parsed.get("summary")
+        except (json.JSONDecodeError, TypeError):
+            pass
 
-    today_metrics = None
-    today_events = db.get_window_events_for_day(today)
-    if today_events:
-        today_sessions = merge_sessions(today_events)
-        today_breaks = detect_breaks(today_sessions)
-        today_metrics = compute_metrics(today_sessions, today_breaks)
-
-    yesterday_metrics = None
-    yesterday_events = db.get_window_events_for_day(yesterday)
-    if yesterday_events:
-        yesterday_sessions = merge_sessions(yesterday_events)
-        yesterday_breaks = detect_breaks(yesterday_sessions)
-        yesterday_metrics = compute_metrics(yesterday_sessions, yesterday_breaks)
-
-    motd_text = await generate_motd(config, today_metrics, yesterday_metrics, today)
+    motd_text = await generate_motd(config, ai_summary_text, today)
 
     if motd_text:
         db.save_motd(today, motd_text)

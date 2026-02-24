@@ -26,8 +26,9 @@ class SearchEngine:
         if not query.strip():
             return []
 
-        # Escape FTS5 special characters for safety
-        fts_query = query.strip()
+        # Quote each word to escape FTS5 special characters (?, *, -, etc.)
+        words = query.strip().split()
+        fts_query = " ".join(f'"{w}"' for w in words if w)
 
         results = self.db.search_fts(fts_query, limit=limit)
 

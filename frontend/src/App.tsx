@@ -8,12 +8,14 @@ import { ControlBar } from "./components/ControlBar";
 import { NavBar } from "./components/NavBar";
 import { ActivityPage } from "./components/activity/ActivityPage";
 import { StoragePage } from "./components/storage/StoragePage";
+import { ChatPage } from "./components/chat/ChatPage";
 
 function getPage(): string {
-  const hash = window.location.hash.replace("#", "") || "player";
+  const hash = window.location.hash.replace("#", "") || "chat";
+  if (hash === "player") return "player";
   if (hash === "activity") return "activity";
   if (hash === "storage") return "storage";
-  return "player";
+  return "chat";
 }
 
 function PlayerView() {
@@ -53,7 +55,7 @@ export function App() {
     <>
       <NavBar currentPage={page} onNavigate={navigate} />
       <div className="app-content">
-        {page === "storage" ? <StoragePage /> : page === "activity" ? <ActivityPage /> : <PlayerView />}
+        {page === "chat" ? <ChatPage /> : page === "storage" ? <StoragePage /> : page === "activity" ? <ActivityPage /> : <PlayerView />}
       </div>
     </>
   );

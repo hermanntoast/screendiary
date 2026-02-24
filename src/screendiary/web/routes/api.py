@@ -114,6 +114,13 @@ async def stats(request: Request):
     data["max_storage_gb"] = config.storage.max_storage_gb
     db_path = config.storage.db_path
     data["db_size_bytes"] = db_path.stat().st_size if db_path.exists() else 0
+
+    # Date range for projections
+    dates = db.get_dates()
+    data["total_days"] = len(dates)
+    data["first_date"] = dates[-1]["date"] if dates else None
+    data["last_date"] = dates[0]["date"] if dates else None
+
     return data
 
 

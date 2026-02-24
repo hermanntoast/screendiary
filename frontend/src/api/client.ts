@@ -140,6 +140,7 @@ export interface DaySummaryResponse {
   metrics: DayMetrics;
   breaks: DayBreak[];
   ai_summary: AISummary | null;
+  motd: string | null;
 }
 
 // --- MOTD ---
@@ -177,9 +178,77 @@ export interface StorageStats {
   storage_gb: number;
   max_storage_gb: number;
   db_size_bytes: number;
+  total_days: number;
+  first_date: string | null;
+  last_date: string | null;
 }
 
 export async function fetchStorageStats(): Promise<StorageStats> {
   const resp = await fetch("/api/stats");
   return resp.json();
+}
+
+// --- AI Chat SSE Stream ---
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function streamAiChat(
+  query: string,
+  history: ChatMessage[],
+  onToken: (token: string) => void,
+  onDone: () => void,
+  onError: (err: string) => void,
+): Promise<void> {
+  const resp = await fetch("/api/search/ai/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, history }),
+  });
+
+  if (!resp.ok || !resp.body) {
+    onError(`HTTP ${resp.status}`);
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      const payload = trimmed.slice(6);
+
+      if (payload === "[DONE]") {
+        onDone();
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.error) {
+          onError(parsed.error);
+          return;
+        }
+        if (parsed.content) {
+          onToken(parsed.content);
+        }
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+  }
+
+  onDone();
 }

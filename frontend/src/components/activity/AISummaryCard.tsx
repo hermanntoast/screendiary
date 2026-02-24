@@ -3,6 +3,7 @@ import { categoryColor } from "./CategoryColors";
 
 interface Props {
   aiSummary: AISummary | null;
+  motd: string | null;
   onRegenerate: () => void;
   loading: boolean;
 }
@@ -17,7 +18,7 @@ function formatBlockDuration(minutes?: number): string {
   return `${minutes}m`;
 }
 
-export function AISummaryCard({ aiSummary, onRegenerate, loading }: Props) {
+export function AISummaryCard({ aiSummary, motd, onRegenerate, loading }: Props) {
   // No summary yet — show generate button
   if (!aiSummary) {
     return (
@@ -50,6 +51,8 @@ export function AISummaryCard({ aiSummary, onRegenerate, loading }: Props) {
           {loading ? "Generiere..." : "Neu generieren"}
         </button>
       </div>
+
+      {motd && <p className="activity-ai-motd">{motd}</p>}
 
       <p className="activity-ai-summary">{aiSummary.summary}</p>
 

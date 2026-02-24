@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreenDiary — Automated Screen Recording &amp; Activity Tracking</title>
+    <meta name="description" content="ScreenDiary captures periodic screenshots, performs OCR, tracks window activity, and archives everything into searchable video segments. Built with Python, FastAPI, and React.">
+    <link rel="icon" href="img/favicon.png" type="image/png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+    <div class="container">
+        <a href="index.html" class="navbar-brand">
+            <img src="img/logo_white.png" alt="ScreenDiary">
+            ScreenDiary
+        </a>
+        <ul class="navbar-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#quickstart">Quick Start</a></li>
+            <li><a href="docs.html">Docs</a></li>
+            <li><a href="https://github.com/hermanntoast/screendiary" target="_blank">GitHub</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-glow"></div>
+    <video src="img/logo_anim.mp4" autoplay loop muted playsinline class="hero-logo"></video>
+    <h1>ScreenDiary</h1>
+    <p class="tagline">Automated screen recording, OCR, and activity tracking for your Linux desktop. Every moment captured, indexed, and searchable.</p>
+    <p class="tagline-note">Developed and tested on Arch Linux (CachyOS) with KDE Plasma 6 on Wayland.</p>
+    <div class="hero-buttons">
+        <a href="docs.html" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/hermanntoast/screendiary" target="_blank" class="btn btn-secondary">GitHub</a>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="section" id="features">
+    <div class="container">
+        <h2 class="section-title">Features</h2>
+        <p class="section-subtitle">Everything you need to capture, search, and analyze your screen activity.</p>
+        <div class="features-grid">
+            <div class="glass-card feature-card">
+                <span class="feature-icon">📸</span>
+                <h3>Periodic Screenshots</h3>
+                <p>Automatic captures at configurable intervals with intelligent deduplication to save storage.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">🔍</span>
+                <h3>OCR Text Extraction</h3>
+                <p>Tesseract-powered OCR extracts text from every screenshot with word-level bounding boxes.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">🪟</span>
+                <h3>Window Tracking</h3>
+                <p>Tracks active windows, application names, and browser domains via KWin DBus integration.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">🎬</span>
+                <h3>Video Archiving</h3>
+                <p>Old screenshots are archived into H.265 video segments, reducing storage by up to 95%.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">🤖</span>
+                <h3>AI Chat</h3>
+                <p>ChatGPT-style interface to query your screen history in natural language. Two-step AI analysis with streaming responses and markdown support.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">📊</span>
+                <h3>Activity Dashboard</h3>
+                <p>Visual timeline, AI-generated Zeiterfassung, top apps, window titles, domain stats, and storage projections.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">🖥️</span>
+                <h3>System Tray</h3>
+                <p>Background daemon with tray icon for quick pause, resume, and web UI access.</p>
+            </div>
+            <div class="glass-card feature-card">
+                <span class="feature-icon">💾</span>
+                <h3>Storage Management</h3>
+                <p>Configurable storage limits with automatic cleanup and efficient WebP + H.265 compression.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Start -->
+<section class="section" id="quickstart">
+    <div class="container">
+        <div class="quickstart">
+            <h2 class="section-title">Quick Start</h2>
+            <p class="section-subtitle">Get up and running in under a minute.</p>
+            <pre><code># Clone the repository
+git clone https://github.com/hermanntoast/screendiary.git
+cd screendiary
+
+# Install Python dependencies
+uv sync
+
+# Copy and edit config
+cp config.toml.example config.toml
+
+# Build the frontend
+uv run screendiary build
+
+# Install systemd services
+uv run screendiary install
+
+# Start everything
+uv run screendiary start</code></pre>
+        </div>
+    </div>
+</section>
+
+<!-- Tech Stack -->
+<section class="section" id="techstack">
+    <div class="container">
+        <h2 class="section-title">Tech Stack</h2>
+        <p class="section-subtitle">Built with modern, reliable technologies.</p>
+        <div class="tech-pills">
+            <span class="tech-pill">Python 3.14</span>
+            <span class="tech-pill">FastAPI</span>
+            <span class="tech-pill">SQLite + FTS5</span>
+            <span class="tech-pill">React 19</span>
+            <span class="tech-pill">TypeScript</span>
+            <span class="tech-pill">Zustand</span>
+            <span class="tech-pill">Vite</span>
+            <span class="tech-pill">Tesseract OCR</span>
+            <span class="tech-pill">FFmpeg / H.265</span>
+            <span class="tech-pill">KWin DBus</span>
+            <span class="tech-pill">systemd</span>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-links">
+            <a href="docs.html">Documentation</a>
+            <a href="https://github.com/hermanntoast/screendiary" target="_blank">GitHub</a>
+            <a href="https://luxcode.io" target="_blank">LUXCODE</a>
+        </div>
+        <p>Developed by <a href="https://luxcode.io" target="_blank">LUXCODE</a></p>
+    </div>
+</footer>
+
+<!-- Copy button script (for quick start code block) -->
+<script>
+document.querySelectorAll('pre').forEach(function(pre) {
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function() {
+        var code = pre.querySelector('code');
+        navigator.clipboard.writeText((code || pre).textContent).then(function() {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+        });
+    });
+    pre.appendChild(btn);
+});
+</script>
+
+</body>
+</html>

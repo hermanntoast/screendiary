@@ -6,6 +6,8 @@
 
 Automatic desktop activity tracker for Linux (KDE Plasma / Wayland). Takes periodic screenshots with OCR text recognition, active window tracking, and a searchable web interface.
 
+> **Note:** ScreenDiary was developed and tested exclusively on **Arch Linux (CachyOS) with KDE Plasma 6 on Wayland**. Other Linux distributions or desktop environments may require adjustments.
+
 ## Features
 
 - **Periodic Screenshots** — Configurable interval (default: 2s) with duplicate detection
@@ -30,7 +32,7 @@ sudo pacman -S libayatana-appindicator python-gobject
 
 ```bash
 # Clone the repository
-git clone https://github.com/user/screendiary.git
+git clone https://github.com/hermanntoast/screendiary.git
 cd screendiary
 
 # Install Python dependencies
@@ -97,8 +99,10 @@ screendiary logs       # Show logs (follow)
 
 Available at `http://127.0.0.1:18787` after starting:
 
+- **Chat** (Default) — AI chat interface to query your screen activity in natural language
 - **Player** — Timeline with screenshot playback and full-text search
-- **Activity** — Daily overview with top apps, window titles, and browser domains
+- **Activity** — Daily overview with AI Zeiterfassung, top apps, window titles, and browser domains
+- **Storage** — Storage usage statistics with usage projections
 
 ## System Tray
 

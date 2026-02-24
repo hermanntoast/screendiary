@@ -18,7 +18,6 @@ export function ActivityPage() {
     daySummary,
     loading,
     daySummaryLoading,
-    motd,
     loadDates,
     loadDaySummary,
     setSelectedDate,
@@ -39,13 +38,8 @@ export function ActivityPage() {
       <ActivityHeader
         dates={dates}
         selectedDate={selectedDate}
-        totalSeconds={summary?.total_seconds ?? 0}
         onDateChange={setSelectedDate}
       />
-
-      {motd && (
-        <div className="activity-motd">{motd}</div>
-      )}
 
       {loading ? (
         <div className="activity-loading">Lade Aktivitaeten...</div>
@@ -75,6 +69,7 @@ export function ActivityPage() {
 
               <AISummaryCard
                 aiSummary={daySummary.ai_summary}
+                motd={daySummary.motd}
                 onRegenerate={handleRegenerate}
                 loading={daySummaryLoading}
               />

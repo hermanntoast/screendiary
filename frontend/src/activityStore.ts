@@ -3,7 +3,6 @@ import {
   fetchDates,
   fetchActivitySummary,
   fetchDaySummary,
-  fetchMotd,
   type ActivitySummary,
   type DaySummaryResponse,
 } from "./api/client";
@@ -16,7 +15,6 @@ interface ActivityState {
   daySummary: DaySummaryResponse | null;
   loading: boolean;
   daySummaryLoading: boolean;
-  motd: string | null;
 
   loadDates: () => Promise<void>;
   loadActivity: (date: string) => Promise<void>;
@@ -31,7 +29,6 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
   daySummary: null,
   loading: false,
   daySummaryLoading: false,
-  motd: null,
 
   loadDates: async () => {
     const dates = await fetchDates();
@@ -41,11 +38,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     const defaultDate = dates.some((d) => d.date === today)
       ? today
       : dates[0]!.date;
-    // Load activity and MOTD in parallel
-    const motdPromise = fetchMotd().then((r) => {
-      if (r.motd) set({ motd: r.motd });
-    }).catch(() => {});
-    await Promise.all([get().loadActivity(defaultDate), motdPromise]);
+    await get().loadActivity(defaultDate);
   },
 
   loadActivity: async (date: string) => {

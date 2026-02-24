@@ -1,0 +1,221 @@
+/* ===== Landing Page Styles ===== */
+
+/* Hero */
+.hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 100vh;
+    padding: 6rem 1.5rem 4rem;
+    overflow: hidden;
+}
+
+.hero-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 800px;
+    height: 800px;
+    transform: translate(-50%, -60%);
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    animation: pulse-glow 4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: translate(-50%, -60%) scale(1); }
+    50% { opacity: 0.7; transform: translate(-50%, -60%) scale(1.15); }
+}
+
+.hero-logo {
+    position: relative;
+    z-index: 1;
+    height: 200px;
+    width: auto;
+    margin-bottom: 2rem;
+}
+
+.hero h1 {
+    position: relative;
+    z-index: 1;
+    font-size: 3.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, var(--foreground) 0%, var(--muted) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero .tagline {
+    position: relative;
+    z-index: 1;
+    font-size: 1.25rem;
+    color: var(--muted);
+    max-width: 600px;
+    margin-bottom: 0.75rem;
+}
+
+.hero .tagline-note {
+    position: relative;
+    z-index: 1;
+    font-size: 0.85rem;
+    color: var(--muted);
+    opacity: 0.7;
+    margin-bottom: 2.5rem;
+}
+
+.hero-buttons {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 1rem;
+}
+
+/* Features Section */
+.section {
+    padding: 5rem 0;
+}
+
+.section-title {
+    text-align: center;
+    margin-bottom: 0.75rem;
+}
+
+.section-subtitle {
+    text-align: center;
+    color: var(--muted);
+    margin-bottom: 3rem;
+    font-size: 1.05rem;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+}
+
+.feature-card {
+    text-align: center;
+    padding: 2rem 1.25rem;
+}
+
+.feature-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.feature-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.feature-card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.feature-card p {
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+/* Quick Start Section */
+.quickstart {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.quickstart pre {
+    margin-top: 1.5rem;
+}
+
+/* Tech Stack */
+.tech-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+}
+
+.tech-pill {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    padding: 0.4rem 1rem;
+    border-radius: 100px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 500;
+    transition: border-color 0.2s;
+}
+
+.tech-pill:hover {
+    border-color: var(--accent);
+    color: var(--foreground);
+}
+
+/* Footer Landing */
+.footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 1rem;
+}
+
+.footer-links a {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 1023px) {
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 767px) {
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hero h1 {
+        font-size: 2rem;
+    }
+
+    .hero .tagline {
+        font-size: 1rem;
+    }
+
+    .hero-buttons {
+        flex-direction: column;
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .hero-buttons .btn {
+        justify-content: center;
+    }
+
+    .navbar-links {
+        display: none;
+    }
+
+    .footer-links {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+    }
+}

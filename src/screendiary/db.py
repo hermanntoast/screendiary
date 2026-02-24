@@ -621,6 +621,46 @@ class Database:
             for r in rows
         ]
 
+    def search_window_events(
+        self,
+        *,
+        ts_from: str | None = None,
+        ts_to: str | None = None,
+        keyword: str | None = None,
+        limit: int = 200,
+    ) -> list[dict]:
+        """Search window events by time range and/or keyword in title/domain."""
+        conditions = []
+        params: list = []
+
+        if ts_from:
+            conditions.append("timestamp >= ?")
+            params.append(ts_from)
+        if ts_to:
+            conditions.append("timestamp <= ?")
+            params.append(ts_to)
+        if keyword:
+            conditions.append(
+                "(LOWER(window_title) LIKE '%' || ? || '%' "
+                "OR LOWER(browser_domain) LIKE '%' || ? || '%' "
+                "OR LOWER(app_class) LIKE '%' || ? || '%')"
+            )
+            kw = keyword.lower()
+            params.extend([kw, kw, kw])
+
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+        rows = self.conn.execute(
+            f"""SELECT screenshot_id, timestamp, app_class, app_name,
+                       window_title, browser_domain
+                FROM window_events
+                {where}
+                ORDER BY timestamp ASC
+                LIMIT ?""",
+            (*params, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_cached_day_summary(self, date: str) -> dict | None:
         """Get cached AI summary for a day. Returns dict or None."""
         row = self.conn.execute(
