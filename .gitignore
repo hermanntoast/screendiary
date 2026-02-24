@@ -1,0 +1,12 @@
+data/
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+.env
+config.toml
+frontend/node_modules/
+src/screendiary/web/frontend_dist/
+.claude

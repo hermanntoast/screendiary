@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ScreenDiary{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/">ScreenDiary</a>
+        </div>
+        <div class="nav-links">
+            <a href="/timeline" class="{% if request.url.path in ['/', '/timeline'] %}active{% endif %}">Timeline</a>
+            <a href="/player" class="{% if request.url.path == '/player' %}active{% endif %}">Player</a>
+            <a href="/search" class="{% if request.url.path == '/search' %}active{% endif %}">Suche</a>
+        </div>
+        <div class="nav-status" id="nav-stats"></div>
+    </nav>
+
+    <main class="container {% block container_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

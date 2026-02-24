@@ -1,0 +1,19 @@
+[Unit]
+Description=ScreenDiary System Tray
+After=graphical-session.target
+PartOf=screendiary.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Dokumente/ScreenDiary
+ExecStart=%h/Dokumente/ScreenDiary/.venv/bin/screendiary tray
+Restart=on-failure
+RestartSec=3
+MemoryMax=256M
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+
+[Install]
+WantedBy=screendiary.target

@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Player - ScreenDiary{% endblock %}
+{% block container_class %}container--player{% endblock %}
+
+{% block content %}
+<div class="player-wrap">
+    <div class="player-topbar">
+        <select id="player-date" class="player-select"></select>
+        <div class="player-search-box">
+            <input type="text" id="player-search" placeholder="Text suchen... (S)" autocomplete="off">
+            <div class="player-search-results" id="search-results"></div>
+        </div>
+        <div class="player-info">
+            <span id="player-time" class="player-time-display">--:--:--</span>
+            <span id="player-pos" class="player-pos-display"></span>
+        </div>
+    </div>
+
+    <div class="player-viewport" id="player-viewport">
+        <div class="player-placeholder" id="player-placeholder">Lade...</div>
+        <div class="player-monitors" id="player-monitors"></div>
+
+        <div class="player-bar" id="player-bar">
+            <div class="player-bar-progress" id="player-bar-progress"></div>
+            <div class="player-bar-handle" id="player-bar-handle"></div>
+        </div>
+        <div class="player-bar-tooltip" id="player-bar-tooltip"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const dateSelect = document.getElementById('player-date');
+    const viewport = document.getElementById('player-viewport');
+    const monitorsEl = document.getElementById('player-monitors');
+    const placeholder = document.getElementById('player-placeholder');
+    const timeEl = document.getElementById('player-time');
+    const posEl = document.getElementById('player-pos');
+    const bar = document.getElementById('player-bar');
+    const barProgress = document.getElementById('player-bar-progress');
+    const barHandle = document.getElementById('player-bar-handle');
+    const barTooltip = document.getElementById('player-bar-tooltip');
+    const searchInput = document.getElementById('player-search');
+    const searchResults = document.getElementById('search-results');
+
+    let entries = [];
+    let currentIndex = -1;
+    let monitorCount = 0;
+    let monitorSlots = [];    // { wrap, img, canvas }
+    let imageCache = new Map();
+    const PRELOAD_AHEAD = 3;
+    const PRELOAD_BEHIND = 1;
+    let activeSearchQuery = '';
+    let searchDebounce = null;
+    let monitorInfoCache = {};
+    let focusedMonitor = -1;  // -1 = show all
+    let searchHitIndices = new Set(); // timeline indices with search hits
+    let searchMarkers = [];   // DOM elements on the bar
+
+    // --- Init ---
+    async function init() {
+        const resp = await fetch('/api/dates');
+        const dates = await resp.json();
+        if (!dates.length) { placeholder.textContent = 'Keine Daten vorhanden'; return; }
+        dates.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.date;
+            opt.textContent = d.date + ' (' + d.count + ')';
+            dateSelect.appendChild(opt);
+        });
+        const today = new Date().toISOString().slice(0, 10);
+        dateSelect.value = dates.some(d => d.date === today) ? today : dates[0].date;
+        loadDate(dateSelect.value);
+    }
+
+    dateSelect.addEventListener('change', () => loadDate(dateSelect.value));
+
+    async function loadDate(date) {
+        if (!date) return;
+        imageCache.clear();
+        monitorInfoCache = {};
+        focusedMonitor = -1;
+        placeholder.style.display = 'flex';
+        placeholder.textContent = 'Lade...';
+        monitorsEl.style.display = 'none';
+        clearSearchMarkers();
+
+        const resp = await fetch('/api/timeline?date=' + encodeURIComponent(date));
+        const data = await resp.json();
+        entries = data.entries || [];
+        if (!entries.length) { placeholder.textContent = 'Keine Screenshots'; return; }
+
+        const info = await fetchMonitorInfo(entries[0].id);
+        setupMonitorSlots(info ? info.monitors.length : 1);
+        goTo(entries.length - 1);
+
+        // Re-apply search markers if there's an active query
+        if (activeSearchQuery) doSearch(activeSearchQuery);
+    }
+
+    function setupMonitorSlots(count) {
+        monitorCount = count;
+        monitorSlots = [];
+        monitorsEl.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'player-mon-slot';
+            wrap.dataset.monitorIndex = i;
+            const img = document.createElement('img');
+            img.className = 'player-mon-img';
+            img.draggable = false;
+            img.alt = 'Monitor ' + i;
+            const canvas = document.createElement('canvas');
+            canvas.className = 'player-mon-canvas';
+            wrap.appendChild(img);
+            wrap.appendChild(canvas);
+            monitorsEl.appendChild(wrap);
+            monitorSlots.push({ wrap, img, canvas });
+
+            // Click to focus/unfocus
+            wrap.addEventListener('click', () => {
+                if (focusedMonitor === i) {
+                    unfocusMonitor();
+                } else {
+                    focusMonitor(i);
+                }
+            });
+        }
+    }
+
+    // --- Focus single monitor ---
+    function focusMonitor(idx) {
+        if (idx < 0 || idx >= monitorCount) return;
+        focusedMonitor = idx;
+        monitorSlots.forEach((s, i) => {
+            s.wrap.classList.toggle('focused', i === idx);
+            s.wrap.classList.toggle('hidden', i !== idx);
+        });
+        // Redraw overlay after layout change
+        requestAnimationFrame(() => {
+            if (activeSearchQuery && currentIndex >= 0) drawOCROverlay(entries[currentIndex].id);
+        });
+    }
+
+    function unfocusMonitor() {
+        focusedMonitor = -1;
+        monitorSlots.forEach(s => {
+            s.wrap.classList.remove('focused', 'hidden');
+        });
+        requestAnimationFrame(() => {
+            if (activeSearchQuery && currentIndex >= 0) drawOCROverlay(entries[currentIndex].id);
+        });
+    }
+
+    // --- Navigation ---
+    function goTo(index) {
+        if (index < 0 || index >= entries.length) return;
+        currentIndex = index;
+        const entry = entries[index];
+
+        for (let m = 0; m < monitorCount; m++) {
+            const key = entry.id + ':' + m;
+            const url = '/screenshots/' + entry.id + '/image?monitor=' + m;
+            if (imageCache.has(key) && imageCache.get(key).complete) {
+                monitorSlots[m].img.src = imageCache.get(key).src;
+            } else {
+                monitorSlots[m].img.src = url;
+            }
+        }
+
+        placeholder.style.display = 'none';
+        monitorsEl.style.display = 'flex';
+
+        const ts = new Date(entry.timestamp);
+        timeEl.textContent = ts.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        posEl.textContent = (index + 1) + ' / ' + entries.length;
+        updateBar();
+        preloadAround(index);
+        if (activeSearchQuery) drawOCROverlay(entry.id);
+    }
+
+    // --- Preloading ---
+    function preloadAround(idx) {
+        for (let i = idx - PRELOAD_BEHIND; i <= idx + PRELOAD_AHEAD; i++) {
+            if (i < 0 || i >= entries.length) continue;
+            const id = entries[i].id;
+            for (let m = 0; m < monitorCount; m++) {
+                const key = id + ':' + m;
+                if (imageCache.has(key)) continue;
+                const pre = new Image();
+                pre.src = '/screenshots/' + id + '/image?monitor=' + m;
+                imageCache.set(key, pre);
+            }
+        }
+        if (imageCache.size > 50 * monitorCount) {
+            for (const [key] of imageCache) {
+                const id = parseInt(key.split(':')[0]);
+                const ei = entries.findIndex(e => e.id === id);
+                if (ei === -1 || Math.abs(ei - idx) > 10) imageCache.delete(key);
+                if (imageCache.size <= 30 * monitorCount) break;
+            }
+        }
+    }
+
+    // --- Progress bar ---
+    function updateBar() {
+        if (entries.length <= 1) {
+            barProgress.style.width = '0%';
+            barHandle.style.left = '0%';
+            return;
+        }
+        const pct = (currentIndex / (entries.length - 1)) * 100;
+        barProgress.style.width = pct + '%';
+        barHandle.style.left = pct + '%';
+    }
+
+    let scrubbing = false;
+    bar.addEventListener('mousedown', e => {
+        if (e.target.classList.contains('player-bar-marker')) return; // let marker clicks pass
+        scrubbing = true; scrubTo(e); e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => { if (scrubbing) scrubTo(e); });
+    document.addEventListener('mouseup', () => { scrubbing = false; });
+
+    function scrubTo(e) {
+        const rect = bar.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const idx = Math.round(pct * (entries.length - 1));
+        goTo(idx);
+    }
+
+    bar.addEventListener('mousemove', e => showTooltip(e));
+    bar.addEventListener('mouseleave', () => { barTooltip.style.display = 'none'; });
+
+    function showTooltip(e) {
+        if (!entries.length) return;
+        const rect = bar.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const idx = Math.round(pct * (entries.length - 1));
+        const ts = new Date(entries[idx].timestamp);
+        barTooltip.textContent = ts.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        barTooltip.style.display = 'block';
+        barTooltip.style.left = (e.clientX - viewport.getBoundingClientRect().left) + 'px';
+    }
+
+    // --- Keyboard ---
+    document.addEventListener('keydown', e => {
+        if (e.target === searchInput) {
+            if (e.key === 'Escape') { searchInput.blur(); e.preventDefault(); }
+            return;
+        }
+        switch (e.key) {
+            case 'ArrowLeft': e.preventDefault(); goTo(currentIndex - 1); break;
+            case 'ArrowRight': e.preventDefault(); goTo(currentIndex + 1); break;
+            case 'Home': e.preventDefault(); goTo(0); break;
+            case 'End': e.preventDefault(); goTo(entries.length - 1); break;
+            case 'Escape':
+                if (focusedMonitor >= 0) { unfocusMonitor(); e.preventDefault(); }
+                break;
+            case 's': case 'f':
+                if (!e.ctrlKey && !e.metaKey) { searchInput.focus(); e.preventDefault(); }
+                break;
+        }
+    });
+
+    // --- Search ---
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        const q = searchInput.value.trim();
+        if (!q) { clearSearch(); return; }
+        searchDebounce = setTimeout(() => doSearch(q), 300);
+    });
+    searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); const q = searchInput.value.trim(); if (q) doSearch(q); }
+        if (e.key === 'Escape') { clearSearch(); searchInput.blur(); }
+    });
+
+    async function doSearch(q) {
+        activeSearchQuery = q;
+        const resp = await fetch('/api/search/text?q=' + encodeURIComponent(q) + '&limit=100');
+        const data = await resp.json();
+        renderSearchResults(data.results);
+        updateSearchMarkers(data.results);
+        if (currentIndex >= 0) drawOCROverlay(entries[currentIndex].id);
+    }
+
+    function clearSearch() {
+        activeSearchQuery = '';
+        searchResults.innerHTML = '';
+        searchResults.style.display = 'none';
+        clearAllCanvases();
+        clearSearchMarkers();
+    }
+
+    function renderSearchResults(results) {
+        if (!results.length) {
+            searchResults.innerHTML = '<div class="psr-empty">Keine Treffer</div>';
+            searchResults.style.display = 'block';
+            return;
+        }
+        searchResults.style.display = 'block';
+        searchResults.innerHTML = '';
+        results.slice(0, 20).forEach(r => {
+            const item = document.createElement('div');
+            item.className = 'psr-item';
+            item.innerHTML = '<span class="psr-time">' + new Date(r.timestamp).toLocaleString('de-DE') + '</span>'
+                + (r.highlights ? r.highlights.map(h => '<span class="psr-hl">' + h + '</span>').join('') : '');
+            item.addEventListener('click', e => {
+                e.stopPropagation();
+                jumpToScreenshot(r.screenshot_id, r.date);
+                searchResults.style.display = 'none';
+            });
+            searchResults.appendChild(item);
+        });
+    }
+
+    async function jumpToScreenshot(id, date) {
+        // Switch date if needed
+        if (date && date !== dateSelect.value) {
+            dateSelect.value = date;
+            await loadDate(date);
+        }
+        const idx = entries.findIndex(e => e.id === id);
+        if (idx >= 0) goTo(idx);
+
+        // Focus on the monitor that has the matching text
+        if (activeSearchQuery && monitorCount > 1) {
+            try {
+                const resp = await fetch('/api/screenshots/' + id + '/ocr-words?q=' + encodeURIComponent(activeSearchQuery));
+                const data = await resp.json();
+                if (data.monitors) {
+                    for (const mon of data.monitors) {
+                        if (mon.words.some(w => w.matched)) {
+                            focusMonitor(mon.monitor_index);
+                            return;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+    }
+
+    // --- Search markers on timeline bar ---
+    function updateSearchMarkers(results) {
+        clearSearchMarkers();
+        if (!entries.length || !results.length) return;
+
+        // Build a Set of screenshot IDs from search results
+        const hitIds = new Set(results.map(r => r.screenshot_id));
+
+        // Map entry indices
+        searchHitIndices = new Set();
+        entries.forEach((e, i) => { if (hitIds.has(e.id)) searchHitIndices.add(i); });
+
+        // Create marker elements on the bar
+        const total = entries.length - 1;
+        if (total <= 0) return;
+        searchHitIndices.forEach(idx => {
+            const marker = document.createElement('div');
+            marker.className = 'player-bar-marker';
+            marker.style.left = ((idx / total) * 100) + '%';
+            marker.title = new Date(entries[idx].timestamp).toLocaleTimeString('de-DE');
+            marker.addEventListener('click', e => { e.stopPropagation(); goTo(idx); });
+            bar.appendChild(marker);
+            searchMarkers.push(marker);
+        });
+    }
+
+    function clearSearchMarkers() {
+        searchMarkers.forEach(m => m.remove());
+        searchMarkers = [];
+        searchHitIndices.clear();
+    }
+
+    document.addEventListener('click', e => {
+        if (!searchResults.contains(e.target) && e.target !== searchInput) {
+            searchResults.style.display = 'none';
+        }
+    });
+
+    // --- OCR Overlay ---
+    async function fetchMonitorInfo(screenshotId) {
+        if (monitorInfoCache[screenshotId]) return monitorInfoCache[screenshotId];
+        try {
+            const resp = await fetch('/api/screenshots/' + screenshotId);
+            const data = await resp.json();
+            monitorInfoCache[screenshotId] = data;
+            return data;
+        } catch(e) { return null; }
+    }
+
+    // Compute the actual rendered area of an object-fit:contain image
+    function getRenderedImageRect(imgEl) {
+        const cw = imgEl.clientWidth, ch = imgEl.clientHeight;
+        const nw = imgEl.naturalWidth, nh = imgEl.naturalHeight;
+        if (!nw || !nh) return { x: 0, y: 0, w: cw, h: ch, scale: 1 };
+        const scale = Math.min(cw / nw, ch / nh);
+        const rw = nw * scale, rh = nh * scale;
+        return { x: (cw - rw) / 2, y: (ch - rh) / 2, w: rw, h: rh, scale };
+    }
+
+    async function drawOCROverlay(screenshotId) {
+        if (!activeSearchQuery) { clearAllCanvases(); return; }
+        try {
+            const [ocrResp, info] = await Promise.all([
+                fetch('/api/screenshots/' + screenshotId + '/ocr-words?q=' + encodeURIComponent(activeSearchQuery)),
+                fetchMonitorInfo(screenshotId)
+            ]);
+            const ocrData = await ocrResp.json();
+            if (!ocrData.monitors) { clearAllCanvases(); return; }
+
+            ocrData.monitors.forEach(monData => {
+                const mIdx = monData.monitor_index;
+                if (mIdx >= monitorSlots.length) return;
+                const { canvas, img: imgEl } = monitorSlots[mIdx];
+                const matched = monData.words.filter(w => w.matched);
+
+                // Size the canvas to match the slot
+                canvas.width = imgEl.clientWidth;
+                canvas.height = imgEl.clientHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (!matched.length) return;
+
+                // Compute actual image rendered area within the slot
+                const rect = getRenderedImageRect(imgEl);
+
+                ctx.fillStyle = 'rgba(233, 69, 96, 0.3)';
+                ctx.strokeStyle = 'rgba(233, 69, 96, 0.7)';
+                ctx.lineWidth = 1.5;
+                matched.forEach(w => {
+                    const x = rect.x + w.left * rect.scale;
+                    const y = rect.y + w.top * rect.scale;
+                    const ww = w.width * rect.scale;
+                    const hh = w.height * rect.scale;
+                    ctx.fillRect(x, y, ww, hh);
+                    ctx.strokeRect(x, y, ww, hh);
+                });
+            });
+        } catch(e) {}
+    }
+
+    function clearAllCanvases() {
+        monitorSlots.forEach(s => s.canvas.getContext('2d').clearRect(0, 0, s.canvas.width, s.canvas.height));
+    }
+
+    window.addEventListener('resize', () => {
+        if (activeSearchQuery && currentIndex >= 0) drawOCROverlay(entries[currentIndex].id);
+    });
+
+    init();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Screenshot #{{ screenshot.id }} - ScreenDiary{% endblock %}
+
+{% block content %}
+<div class="detail-header">
+    <div class="detail-nav">
+        <a href="/screenshot/{{ screenshot.id - 1 }}" class="btn btn-sm">&larr; Vorheriger</a>
+        <h2>{{ screenshot.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</h2>
+        <a href="/screenshot/{{ screenshot.id + 1 }}" class="btn btn-sm">Naechster &rarr;</a>
+    </div>
+    <div class="detail-meta">
+        <span>{{ screenshot.width }}x{{ screenshot.height }}</span>
+        <span>{{ (screenshot.file_size / 1024)|round(1) }} KB</span>
+        <span class="badge {{ screenshot.storage_type }}">{{ screenshot.storage_type }}</span>
+    </div>
+</div>
+
+<div class="detail-monitors">
+    {% for mc in monitors %}
+    <div class="monitor-panel">
+        <h3>Monitor {{ mc.monitor_index }}: {{ mc.monitor_name }}</h3>
+        <div class="monitor-image-container ocr-overlay-container">
+            <img
+                src="/screenshots/{{ screenshot.id }}/image?monitor={{ mc.monitor_index }}"
+                alt="Monitor {{ mc.monitor_index }}"
+                class="monitor-image zoomable"
+                loading="lazy"
+                data-monitor-capture-id="{{ mc.id }}"
+                data-native-width="{{ mc.width }}"
+                data-native-height="{{ mc.height }}"
+            >
+            <canvas class="ocr-overlay" data-monitor-capture-id="{{ mc.id }}"></canvas>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if ocr_text %}
+<div class="ocr-panel">
+    <h3>OCR Text</h3>
+    <pre class="ocr-text">{{ ocr_text }}</pre>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Image zoom
+document.querySelectorAll('.zoomable').forEach(img => {
+    img.addEventListener('click', () => {
+        img.classList.toggle('zoomed');
+    });
+});
+
+// OCR word highlighting
+const urlParams = new URLSearchParams(window.location.search);
+const highlightQuery = urlParams.get('q');
+
+if (highlightQuery) {
+    const screenshotId = {{ screenshot.id }};
+
+    async function loadAndDrawHighlights() {
+        const resp = await fetch(`/api/screenshots/${screenshotId}/ocr-words?q=${encodeURIComponent(highlightQuery)}`);
+        const data = await resp.json();
+
+        data.monitors.forEach(monData => {
+            const canvas = document.querySelector(`canvas.ocr-overlay[data-monitor-capture-id="${monData.monitor_capture_id}"]`);
+            const img = document.querySelector(`img[data-monitor-capture-id="${monData.monitor_capture_id}"]`);
+            if (!canvas || !img) return;
+
+            function draw() {
+                const displayW = img.clientWidth;
+                const displayH = img.clientHeight;
+                const nativeW = parseInt(img.dataset.nativeWidth) || img.naturalWidth;
+                const nativeH = parseInt(img.dataset.nativeHeight) || img.naturalHeight;
+
+                canvas.width = displayW;
+                canvas.height = displayH;
+                canvas.style.width = displayW + 'px';
+                canvas.style.height = displayH + 'px';
+
+                const scaleX = displayW / nativeW;
+                const scaleY = displayH / nativeH;
+
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, displayW, displayH);
+
+                monData.words.forEach(w => {
+                    if (!w.matched) return;
+                    ctx.fillStyle = 'rgba(233, 69, 96, 0.35)';
+                    ctx.strokeStyle = 'rgba(233, 69, 96, 0.8)';
+                    ctx.lineWidth = 1;
+                    const x = w.left * scaleX;
+                    const y = w.top * scaleY;
+                    const width = w.width * scaleX;
+                    const height = w.height * scaleY;
+                    ctx.fillRect(x, y, width, height);
+                    ctx.strokeRect(x, y, width, height);
+                });
+            }
+
+            if (img.complete) {
+                draw();
+            } else {
+                img.addEventListener('load', draw);
+            }
+
+            window.addEventListener('resize', draw);
+        });
+    }
+
+    loadAndDrawHighlights();
+}
+</script>
+{% endblock %}

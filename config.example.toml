@@ -1,0 +1,38 @@
+[capture]
+interval = 2
+similarity_threshold = 0.98
+tool = "spectacle"
+
+[storage]
+data_dir = "data"
+format = "webp"
+quality = 80
+thumbnail_width = 320
+max_storage_gb = 200
+archive_after_minutes = 10
+segment_duration_minutes = 5
+h265_crf = 28
+h265_preset = "medium"
+frame_cache_size = 100
+
+[ocr]
+languages = "deu+eng"
+psm = 3
+min_text_length = 10
+workers = 2
+
+[ai]
+api_base = "http://localhost:8000/v1"
+api_key = ""
+embedding_model = "text-embedding-3-small"
+chat_model = "gpt-4"
+chunk_max_tokens = 512
+enabled = true
+
+[web]
+host = "127.0.0.1"
+port = 18787
+page_size = 50
+
+[logging]
+level = "INFO"

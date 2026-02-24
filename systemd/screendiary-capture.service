@@ -1,0 +1,20 @@
+[Unit]
+Description=ScreenDiary Capture Daemon
+After=graphical-session.target
+PartOf=screendiary.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Dokumente/ScreenDiary
+ExecStart=%h/Dokumente/ScreenDiary/.venv/bin/screendiary capture
+Restart=on-failure
+RestartSec=5
+WatchdogSec=60
+CPUQuota=50%
+MemoryMax=1G
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+
+[Install]
+WantedBy=screendiary.target

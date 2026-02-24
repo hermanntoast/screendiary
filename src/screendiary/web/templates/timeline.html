@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Timeline - ScreenDiary{% endblock %}
+
+{% block content %}
+<div class="timeline-header">
+    <h1>Timeline</h1>
+    <div class="date-nav">
+        <select id="date-select">
+            <option value="">Alle Tage</option>
+        </select>
+    </div>
+</div>
+
+<div class="timeline-grid" id="timeline-grid">
+    <!-- Filled by JS -->
+</div>
+
+<div class="load-more" id="load-more" style="display:none;">
+    <button onclick="loadMore()">Mehr laden</button>
+</div>
+
+<div class="loading" id="loading">Lade...</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+let currentDate = '';
+let loading = false;
+let hasMore = true;
+
+async function loadDates() {
+    const resp = await fetch('/api/dates');
+    const dates = await resp.json();
+    const sel = document.getElementById('date-select');
+    dates.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.date;
+        opt.textContent = `${d.date} (${d.count})`;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadScreenshots(append = false) {
+    if (loading) return;
+    loading = true;
+    document.getElementById('loading').style.display = 'block';
+
+    const params = new URLSearchParams({page: currentPage});
+    if (currentDate) params.set('date', currentDate);
+
+    const resp = await fetch(`/api/screenshots?${params}`);
+    const data = await resp.json();
+
+    const grid = document.getElementById('timeline-grid');
+    if (!append) grid.innerHTML = '';
+
+    data.screenshots.forEach(s => {
+        const card = document.createElement('a');
+        card.href = `/screenshot/${s.id}`;
+        card.className = 'timeline-card';
+        card.innerHTML = `
+            <img src="${s.thumb_url}" alt="Screenshot" loading="lazy">
+            <div class="card-meta">
+                <span class="card-time">${new Date(s.timestamp).toLocaleTimeString('de-DE')}</span>
+                <span class="card-type ${s.storage_type}">${s.storage_type}</span>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+    hasMore = currentPage < data.pages;
+    document.getElementById('load-more').style.display = hasMore ? 'block' : 'none';
+    document.getElementById('loading').style.display = 'none';
+    loading = false;
+}
+
+function loadMore() {
+    if (!hasMore) return;
+    currentPage++;
+    loadScreenshots(true);
+}
+
+document.getElementById('date-select').addEventListener('change', (e) => {
+    currentDate = e.target.value;
+    currentPage = 1;
+    loadScreenshots();
+});
+
+// Infinite scroll
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500) {
+        if (hasMore && !loading) loadMore();
+    }
+});
+
+// Init
+loadDates();
+loadScreenshots();
+
+// Load stats
+fetch('/api/stats').then(r => r.json()).then(s => {
+    document.getElementById('nav-stats').textContent =
+        `${s.total_screenshots} Screenshots | ${s.storage_gb} GB`;
+});
+</script>
+{% endblock %}

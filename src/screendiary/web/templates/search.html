@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Suche - ScreenDiary{% endblock %}
+
+{% block content %}
+<div class="search-header">
+    <h1>Suche</h1>
+    <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Suchbegriff eingeben..." autofocus>
+        <div class="search-buttons">
+            <button onclick="doTextSearch()" class="btn">Text-Suche</button>
+            <button onclick="doAISearch()" class="btn btn-accent">AI-Suche</button>
+            <button onclick="toggleChat()" class="btn btn-outline">AI-Chat</button>
+        </div>
+    </div>
+</div>
+
+<div class="search-results" id="search-results">
+    <!-- Filled by JS -->
+</div>
+
+<div class="chat-panel" id="chat-panel" style="display:none;">
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+        <input type="text" id="chat-input" placeholder="Frage stellen...">
+        <button onclick="sendChat()" class="btn btn-accent">Senden</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const searchInput = document.getElementById('search-input');
+searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doTextSearch();
+});
+
+async function doTextSearch() {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    const resp = await fetch(`/api/search/text?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    renderResults(data.results, 'Text-Suche');
+}
+
+async function doAISearch() {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    const resp = await fetch(`/api/search/ai?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    renderResults(data.results, 'AI-Suche');
+}
+
+function renderResults(results, label) {
+    const container = document.getElementById('search-results');
+    const q = searchInput.value.trim();
+    if (!results.length) {
+        container.innerHTML = `<div class="no-results">Keine Ergebnisse fuer "${label}"</div>`;
+        return;
+    }
+    container.innerHTML = `<h3>${label}: ${results.length} Ergebnisse</h3>`;
+    results.forEach(r => {
+        const card = document.createElement('a');
+        card.href = `/screenshot/${r.screenshot_id}${q ? '?q=' + encodeURIComponent(q) : ''}`;
+        card.className = 'search-result-card';
+        card.innerHTML = `
+            <img src="${r.thumb_url}" alt="Screenshot" loading="lazy">
+            <div class="result-info">
+                <div class="result-time">${new Date(r.timestamp).toLocaleString('de-DE')}</div>
+                <div class="result-score">Score: ${r.score}</div>
+                ${r.highlights ? r.highlights.map(h => `<div class="result-highlight">${h}</div>`).join('') : ''}
+                <div class="result-text">${(r.ocr_text || '').substring(0, 200)}</div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// Chat
+let chatHistory = [];
+
+function toggleChat() {
+    const panel = document.getElementById('chat-panel');
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+}
+
+document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendChat();
+});
+
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const query = input.value.trim();
+    if (!query) return;
+    input.value = '';
+
+    const messages = document.getElementById('chat-messages');
+    messages.innerHTML += `<div class="chat-msg user">${escapeHtml(query)}</div>`;
+    chatHistory.push({role: 'user', content: query});
+
+    const aiMsg = document.createElement('div');
+    aiMsg.className = 'chat-msg assistant';
+    aiMsg.textContent = '...';
+    messages.appendChild(aiMsg);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+        const resp = await fetch('/api/search/ai/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({query, history: chatHistory}),
+        });
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+        aiMsg.textContent = '';
+
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            const text = decoder.decode(value, {stream: true});
+            for (const line of text.split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6);
+                if (payload === '[DONE]') break;
+                try {
+                    const data = JSON.parse(payload);
+                    if (data.content) {
+                        fullText += data.content;
+                        aiMsg.textContent = fullText;
+                    }
+                } catch {}
+            }
+        }
+        chatHistory.push({role: 'assistant', content: fullText});
+    } catch (e) {
+        aiMsg.textContent = 'Fehler: ' + e.message;
+    }
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,1 @@
+// ScreenDiary common JS

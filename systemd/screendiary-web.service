@@ -1,0 +1,14 @@
+[Unit]
+Description=ScreenDiary Web UI
+PartOf=screendiary.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Dokumente/ScreenDiary
+ExecStart=%h/Dokumente/ScreenDiary/.venv/bin/screendiary web
+Restart=on-failure
+RestartSec=3
+MemoryMax=512M
+
+[Install]
+WantedBy=screendiary.target

@@ -1,0 +1,6 @@
+[Unit]
+Description=ScreenDiary Services
+Wants=screendiary-capture.service screendiary-web.service screendiary-tray.service
+
+[Install]
+WantedBy=default.target
